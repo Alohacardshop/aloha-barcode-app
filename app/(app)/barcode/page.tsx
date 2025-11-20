@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Page, 
   Card, 
@@ -32,7 +32,7 @@ interface ProductLookupResult {
   }[];
 }
 
-export default function Dashboard() {
+export default function BarcodeScannerPage() {
   const router = useRouter();
   const [barcode, setBarcode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,9 +42,53 @@ export default function Dashboard() {
   const [newQuantity, setNewQuantity] = useState('');
   const [updating, setUpdating] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
-  const handleLookup = async () => {
-    if (!barcode.trim()) {
+  useEffect(() => {
+    // Auto-focus on barcode input when component mounts
+    return () => {
+      // Cleanup camera stream on unmount
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const startCamera = async () => {
+    setCameraError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+        setCameraActive(true);
+      }
+    } catch (err: any) {
+      setCameraError('Unable to access camera: ' + err.message);
+      console.error('Camera access error:', err);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
+  };
+
+  const handleLookup = async (barcodeValue?: string) => {
+    const lookupBarcode = barcodeValue || barcode;
+    
+    if (!lookupBarcode.trim()) {
       setError('Please enter a barcode or SKU');
       return;
     }
@@ -58,7 +102,7 @@ export default function Dashboard() {
       const response = await fetch('/api/lookup-product', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ barcode: barcode.trim() }),
+        body: JSON.stringify({ barcode: lookupBarcode.trim() }),
       });
 
       const data = await response.json();
@@ -111,7 +155,7 @@ export default function Dashboard() {
 
       setSuccessMessage(data.message);
       // Refresh the product data
-      handleLookup();
+      handleLookup(result.barcode || result.sku);
     } catch (err: any) {
       setError(err.message || 'An error occurred');
     } finally {
@@ -120,36 +164,88 @@ export default function Dashboard() {
   };
 
   return (
-    <Page title="ACS Barcode">
+    <Page 
+      title="Scan Barcode"
+      backAction={{ content: 'Home', onAction: () => router.push('/app') }}
+    >
       <Layout>
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
               <Text variant="headingMd" as="h2">
-                Barcode Lookup
+                Barcode Scanner
               </Text>
               
+              <Text as="p" tone="subdued">
+                Use your device camera to scan barcodes, or enter them manually below.
+              </Text>
+
+              {!cameraActive && (
+                <Button onClick={startCamera} variant="secondary">
+                  Start Camera
+                </Button>
+              )}
+
+              {cameraActive && (
+                <BlockStack gap="300">
+                  <Box 
+                    background="bg-surface-secondary" 
+                    borderRadius="200"
+                    padding="400"
+                  >
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      style={{
+                        width: '100%',
+                        maxWidth: '600px',
+                        borderRadius: '8px',
+                        display: 'block',
+                        margin: '0 auto',
+                      }}
+                    />
+                  </Box>
+                  <InlineStack gap="200">
+                    <Button onClick={stopCamera} tone="critical">
+                      Stop Camera
+                    </Button>
+                    <Text as="span" tone="subdued">
+                      Note: Automatic barcode detection requires a library. Use manual entry below.
+                    </Text>
+                  </InlineStack>
+                </BlockStack>
+              )}
+
+              {cameraError && (
+                <Banner tone="warning">
+                  {cameraError}
+                </Banner>
+              )}
+
+              <Divider />
+
+              <Text variant="headingMd" as="h3">
+                Manual Entry
+              </Text>
+
               <InlineStack gap="300" align="start">
                 <div style={{ flex: 1 }}>
                   <TextField
                     label="Barcode or SKU"
                     value={barcode}
                     onChange={setBarcode}
-                    placeholder="Enter barcode or SKU"
+                    placeholder="Enter or scan barcode"
                     autoComplete="off"
+                    autoFocus
                   />
                 </div>
                 <Button 
                   variant="primary" 
-                  onClick={handleLookup}
+                  onClick={() => handleLookup()}
                   loading={loading}
                 >
                   Lookup Product
-                </Button>
-                <Button 
-                  onClick={() => router.push('/app/barcode')}
-                >
-                  Scan Barcode
                 </Button>
               </InlineStack>
 
@@ -275,5 +371,3 @@ export default function Dashboard() {
     </Page>
   );
 }
-
-

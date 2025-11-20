@@ -16,6 +16,7 @@ import {
   Divider,
 } from '@shopify/polaris';
 import { useRouter } from 'next/navigation';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface ProductLookupResult {
   productId: string;
@@ -44,45 +45,70 @@ export default function BarcodeScannerPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState('');
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
-    // Auto-focus on barcode input when component mounts
+    // Cleanup on unmount
     return () => {
-      // Cleanup camera stream on unmount
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(console.error);
       }
     };
   }, []);
 
   const startCamera = async () => {
     setCameraError('');
+    setIsScanning(true);
+    
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        setCameraActive(true);
+      if (!scannerRef.current) {
+        scannerRef.current = new Html5Qrcode("barcode-scanner");
       }
+
+      const cameras = await Html5Qrcode.getCameras();
+      if (cameras.length === 0) {
+        throw new Error('No cameras found');
+      }
+
+      // Prefer back camera
+      const cameraId = cameras.find(cam => cam.label.toLowerCase().includes('back'))?.id || cameras[0].id;
+
+      await scannerRef.current.start(
+        cameraId,
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+        },
+        (decodedText) => {
+          // Barcode detected
+          setBarcode(decodedText);
+          handleLookup(decodedText);
+          stopCamera();
+        },
+        (errorMessage) => {
+          // Scanning error (this is normal, happens continuously when no barcode is detected)
+        }
+      );
+
+      setCameraActive(true);
+      setIsScanning(false);
     } catch (err: any) {
       setCameraError('Unable to access camera: ' + err.message);
+      setIsScanning(false);
       console.error('Camera access error:', err);
     }
   };
 
   const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
+    if (scannerRef.current) {
+      scannerRef.current.stop()
+        .then(() => {
+          setCameraActive(false);
+          scannerRef.current = null;
+        })
+        .catch(console.error);
     }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setCameraActive(false);
   };
 
   const handleLookup = async (barcodeValue?: string) => {
@@ -180,10 +206,19 @@ export default function BarcodeScannerPage() {
                 Use your device camera to scan barcodes, or enter them manually below.
               </Text>
 
-              {!cameraActive && (
+              {!cameraActive && !isScanning && (
                 <Button onClick={startCamera} variant="secondary">
-                  Start Camera
+                  Start Camera Scanner
                 </Button>
+              )}
+
+              {isScanning && (
+                <Box padding="400">
+                  <InlineStack align="center">
+                    <Spinner size="small" />
+                    <Text as="span">Initializing camera...</Text>
+                  </InlineStack>
+                </Box>
               )}
 
               {cameraActive && (
@@ -193,25 +228,21 @@ export default function BarcodeScannerPage() {
                     borderRadius="200"
                     padding="400"
                   >
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
+                    <div 
+                      id="barcode-scanner" 
                       style={{
                         width: '100%',
                         maxWidth: '600px',
-                        borderRadius: '8px',
-                        display: 'block',
                         margin: '0 auto',
                       }}
                     />
                   </Box>
                   <InlineStack gap="200">
                     <Button onClick={stopCamera} tone="critical">
-                      Stop Camera
+                      Stop Scanner
                     </Button>
                     <Text as="span" tone="subdued">
-                      Note: Automatic barcode detection requires a library. Use manual entry below.
+                      Position barcode within the frame
                     </Text>
                   </InlineStack>
                 </BlockStack>

@@ -1,53 +1,42 @@
-# Aloha Barcode App
+# Aloha Barcode App (ACS-Barcode)
 
-A Shopify embedded app for designing and printing barcode labels.
+A Shopify embedded admin app for barcode scanning and inventory management at Aloha Card Shop.
 
 ## Features
 
-- 🏪 Shopify OAuth integration
-- 🎨 Visual drag-and-drop label designer
-- 🏷️ ZPL barcode generation
-- 🔍 Product filtering (search, tags, recent)
-- 💾 Label template persistence
-- 🖨️ Print API endpoint
-- 📦 Full Shopify embedded app experience
+- 📱 **Barcode Scanner**: Use device camera to scan barcodes with automatic detection
+- 🔍 **Product Lookup**: Search products by barcode or SKU
+- 📦 **Inventory Management**: View and update inventory levels across locations
+- 🏪 **Shopify Integration**: Fully embedded in Shopify Admin with OAuth
+- 🎨 **Polaris UI**: Clean, professional interface using Shopify's design system
+- 🖨️ **Label Designer**: Visual drag-and-drop label designer (legacy feature)
+- 🏷️ **ZPL Generation**: Barcode label generation for thermal printers
 
 ## Prerequisites
 
 - Node.js 18+ and npm
 - Shopify Partner account
-- Shopify app created in Partner Dashboard
-- ngrok (for local development with HTTPS)
+- Shopify CLI installed (`npm install -g @shopify/cli @shopify/app`)
+- Development store (acs-barcode-dev.myshopify.com or your own)
 
-## Setup
+## Quick Start
 
-### Step 1: Create Shopify App in Partners Dashboard
-
-1. Go to [Shopify Partners](https://partners.shopify.com/)
-2. Navigate to **Apps** → **Create app**
-3. Choose **Create app manually**
-4. Fill in app details:
-   - **App name**: Aloha Barcode App (or your choice)
-   - **App URL**: We'll set this after starting ngrok
-   - **Allowed redirection URL(s)**: We'll set this after starting ngrok
-5. **Enable "Embedded app"** option
-6. Note down your **API key** and **API secret key** from the app settings
-
-### Step 2: Install Dependencies
+### Step 1: Install Dependencies
 
 ```bash
 npm install
 ```
 
-### Step 3: Configure Environment Variables
+### Step 2: Configure Environment Variables
 
 Create `.env.local` in the project root:
 
 ```env
 SHOPIFY_API_KEY=your_api_key_from_partners
 SHOPIFY_API_SECRET=your_api_secret_from_partners
-SCOPES=read_products,write_products
+SCOPES=read_products,write_products,read_inventory,write_inventory
 HOST=localhost:3000
+NEXT_PUBLIC_SHOPIFY_API_KEY=your_api_key_from_partners
 ```
 
 **Important:** 
@@ -59,101 +48,207 @@ HOST=localhost:3000
 Since Shopify requires HTTPS for embedded apps, you'll need to use ngrok to tunnel your local server.
 
 1. **Install ngrok:**
-   - Download from [ngrok.com](https://ngrok.com/download)
-   - Or use: `npm install -g ngrok`
+### Step 3: Run with Shopify CLI
 
-2. **Start your Next.js dev server:**
-   ```bash
-   npm run dev
-   ```
+The easiest way to develop is using Shopify CLI which handles tunneling automatically:
 
-3. **In a separate terminal, start ngrok:**
-   ```bash
-   ngrok http 3000
-   ```
+```bash
+shopify app dev
+```
 
-4. **Copy the HTTPS URL** from ngrok (e.g., `https://abc123.ngrok.io`)
+This will:
+- Start the Next.js development server
+- Create a secure tunnel (no need for ngrok)
+- Update your app configuration automatically
+- Provide you with a URL to install/test the app
 
-5. **Update `.env.local`:**
-   ```env
-   HOST=abc123.ngrok.io
-   ```
+### Step 4: Install the App
 
-6. **Update Shopify App Settings:**
-   - Go back to your app in Shopify Partners
-   - Set **App URL** to: `https://abc123.ngrok.io/api/auth`
-   - Set **Allowed redirection URL(s)** to: `https://abc123.ngrok.io/api/auth/callback`
-   - Save changes
+1. Follow the URL provided by `shopify app dev`
+2. Select your development store (acs-barcode-dev.myshopify.com)
+3. Click "Install app"
+4. Approve the permissions (products, inventory)
 
-**Note:** Each time you restart ngrok, you'll get a new URL. You'll need to update both `.env.local` and the Shopify app settings.
+### Step 5: Test the Features
 
-### Step 5: Run the Application
+1. **Main Dashboard** (`/app`):
+   - Enter a barcode or SKU manually
+   - Click "Lookup Product" to search
+   - View product details and inventory levels
+   - Adjust inventory quantities
 
-1. **Start the dev server:**
-   ```bash
-   npm run dev
-   ```
+2. **Barcode Scanner** (`/app/barcode`):
+   - Click "Start Camera Scanner"
+   - Allow camera permissions in your browser
+   - Point camera at a barcode
+   - Product will be looked up automatically
 
-2. **Start ngrok** (in another terminal):
-   ```bash
-   ngrok http 3000
-   ```
+3. **Test API** (`/api/test`):
+   - Visit this endpoint to verify Shopify connection
+   - Returns shop info and sample products
 
-3. **Access the app:**
-   - Install the app in your Shopify admin
-   - Or navigate to: `https://your-ngrok-url.ngrok.io/api/auth?shop=your-shop.myshopify.com`
+## API Endpoints
+
+### `POST /api/lookup-product`
+Search for a product by barcode or SKU.
+
+**Request:**
+```json
+{
+  "barcode": "123456789"
+}
+```
+
+**Response:**
+```json
+{
+  "productId": "gid://shopify/Product/123",
+  "productTitle": "Sample Product",
+  "variantId": "gid://shopify/ProductVariant/456",
+  "variantTitle": "Default Title",
+  "sku": "ABC-123",
+  "barcode": "123456789",
+  "inventoryItemId": "gid://shopify/InventoryItem/789",
+  "inventoryLevels": [
+    {
+      "locationId": "gid://shopify/Location/1",
+      "locationName": "Main Store",
+      "available": 10
+    }
+  ]
+}
+```
+
+### `POST /api/update-inventory`
+Update inventory quantity at a specific location.
+
+**Request:**
+```json
+{
+  "inventoryItemId": "gid://shopify/InventoryItem/789",
+  "locationId": "gid://shopify/Location/1",
+  "newQuantity": 15
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Inventory updated successfully from 10 to 15",
+  "previousQuantity": 10,
+  "newQuantity": 15,
+  "adjustment": 5
+}
+```
+
+### `GET /api/test`
+Test endpoint to verify Shopify API connection and permissions.
 
 ## Project Structure
 
 ```
 aloha-barcode-app/
 ├── app/                    # Next.js app directory
+│   ├── (app)/             # App routes (embedded in Shopify)
+│   │   ├── page.tsx       # Main dashboard with barcode lookup
+│   │   ├── barcode/       # Camera barcode scanner page
+│   │   ├── designer/      # Label designer (legacy)
+│   │   └── products/      # Product management (legacy)
 │   ├── api/               # API routes
-│   │   ├── auth/         # OAuth authentication
-│   │   ├── print/        # Print endpoint
-│   │   ├── products/     # Products API
-│   │   └── templates/    # Template management
-│   └── (app)/            # App pages (with layout)
-│       ├── products/     # Products page
-│       └── designer/     # Label designer
+│   │   ├── auth/          # OAuth authentication
+│   │   ├── lookup-product/ # Product search by barcode/SKU
+│   │   ├── update-inventory/ # Inventory adjustment
+│   │   ├── test/          # Connection test endpoint
+│   │   └── ...            # Other API routes
+│   ├── layout.tsx         # Root layout
+│   ├── client-layout.tsx  # Client-side layout wrapper
+│   └── providers.tsx      # App Bridge & Polaris providers
 ├── components/            # React components
-│   ├── LabelDesignerCanvas.tsx
-│   ├── ProductFilters.tsx
-│   ├── ProductList.tsx
-│   └── ZPLPreview.tsx
-├── data/                  # Template storage (JSON files)
-├── lib/                   # Utilities
+├── lib/                   # Utilities and helpers
 │   ├── shopify.ts        # Shopify API client
-│   ├── session-storage.ts # Session storage
-│   ├── auth-helpers.ts   # Auth utilities
-│   ├── zpl-generator.ts  # ZPL code generator
-│   ├── printer.ts        # Printer integration stub
+│   ├── auth-helpers.ts   # Authentication helpers
+│   ├── logger.ts         # Error logging utility
+│   ├── session-storage.ts # Session management
 │   └── types.ts          # TypeScript types
-└── .sessions/            # OAuth session files
+├── shopify.app.toml      # Shopify app configuration
+└── .env.local           # Environment variables (not committed)
 ```
+
+## Technologies Used
+
+- **Next.js 14**: React framework with App Router
+- **TypeScript**: Type-safe development
+- **Shopify App Bridge**: Embedded app integration
+- **Shopify Polaris**: UI component library
+- **html5-qrcode**: Barcode scanning library
+- **Shopify Admin API**: GraphQL API for products and inventory
+- **File-based Sessions**: Simple session storage
 
 ## Development
 
-- `npm run dev` - Start development server
+- `npm run dev` - Start development server (port 3000)
+- `shopify app dev` - Start with Shopify CLI (recommended)
 - `npm run build` - Build for production
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint
 
-## API Endpoints
+## Troubleshooting
 
-### Authentication
-- `GET /api/auth` - Initiate OAuth flow
-- `GET /api/auth/callback` - Handle OAuth callback
-- `GET /api/auth/exitiframe` - Exit iframe redirect
+### Camera Not Working
+- Ensure you're using HTTPS or localhost
+- Check browser permissions for camera access
+- Try a different browser (Chrome/Edge recommended)
 
-### Products
-- `GET /api/products` - Fetch Shopify products
-  - Query params: 
-    - `days` (integer): Filter by creation date (e.g., `days=7` for last 7 days)
-    - `tags` (comma-separated): Filter by tags (e.g., `tags=tag1,tag2`)
-    - `search` (string): Search by product name, SKU, or barcode
-    - `inStockOnly` (boolean, default: true): Only show products with inventory > 0
-  - Example: `/api/products?days=7&tags=tag1,tag2&search=product&inStockOnly=true`
+### Authentication Issues
+- Verify your API key and secret in `.env.local`
+- Make sure scopes are correct in `shopify.app.toml`
+- Run `shopify app config push` to update app configuration
+- Reinstall the app on your development store
+
+### Product Not Found
+- Ensure products have barcodes or SKUs set in Shopify
+- Check that your app has the correct permissions
+- Verify inventory tracking is enabled for the product
+
+### Inventory Update Fails
+- Confirm `write_inventory` scope is approved
+- Check that the location exists and is active
+- Ensure inventory item is tracked
+
+## Production Deployment
+
+### Option 1: Vercel (Recommended for Next.js)
+
+1. Push your code to GitHub
+2. Import project in Vercel
+3. Add environment variables
+4. Deploy
+5. Update `shopify.app.toml` with production URL
+
+### Option 2: Shopify Hosting
+
+```bash
+shopify app deploy
+```
+
+This will deploy your app to Shopify's infrastructure.
+
+## Security Notes
+
+- Never commit `.env.local` to version control
+- Keep session files (`.sessions/`) out of git
+- Use environment variables for all secrets
+- Validate all API inputs
+- Use HTTPS in production
+
+## License
+
+Proprietary - Aloha Card Shop
+
+## Support
+
+For issues or questions, contact the development team.
 
 ### Profiles
 - `GET /api/profiles` - List all label profiles

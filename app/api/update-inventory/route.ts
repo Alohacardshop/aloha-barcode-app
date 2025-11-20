@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-helpers';
 import shopify from '@/lib/shopify';
+import { logger, createErrorResponse } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -108,11 +109,16 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Error updating inventory:', error);
+    const errorResponse = createErrorResponse(
+      'Failed to update inventory',
+      error,
+      500,
+      'update-inventory'
+    );
     return NextResponse.json(
       { 
         success: false, 
-        message: error.message || 'Failed to update inventory'
+        message: errorResponse.error
       },
       { status: 500 }
     );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-helpers';
 import shopify from '@/lib/shopify';
+import { logger, createErrorResponse } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -116,10 +117,12 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Error looking up product:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to lookup product' },
-      { status: 500 }
+    const errorResponse = createErrorResponse(
+      'Failed to lookup product',
+      error,
+      500,
+      'lookup-product'
     );
+    return NextResponse.json(errorResponse, { status: 500 });
   }
 }
